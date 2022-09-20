@@ -20,6 +20,7 @@ namespace ciscode
         MySqlCommand cmd;  //sql문장을 실행시킬때
         MySqlDataReader reader;   //sql문장을 실행시키고 결과받을때
         private bool Select_sw = false;
+        private bool select_cgsw = false;
 
         public Form1()
         {
@@ -30,6 +31,7 @@ namespace ciscode
         {
             // sql문 작성
             // 연결된
+            dataGridView1.Rows.Clear();
             String sql = "select  cdg_grpcd, cdg_grpnm, cdg_digit, cdg_length, cdg_use, cdg_kind from yyc_cdg";
 
             if (reader != null) reader.Close();
@@ -45,12 +47,11 @@ namespace ciscode
             {
                 //read해서 data가 읽히면 계속 작업
                 dataGridView1.Rows.Add();
-                dataGridView1.Rows[i].Cells[0].Value = (string)reader["cdg_grpcd"];
-                dataGridView1.Rows[i].Cells[1].Value = (string)reader["cdg_grpnm"];
-                dataGridView1.Rows[i].Cells[2].Value = (int)reader["cdg_digit"];
-                dataGridView1.Rows[i].Cells[3].Value = (int)reader["cdg_length"];
-
-                dataGridView1.Rows[i].Cells[4].Value = (string)reader["cdg_use"];
+                dataGridView1.Rows[i].Cells[1].Value = (string)reader["cdg_grpcd"];
+                dataGridView1.Rows[i].Cells[2].Value = (string)reader["cdg_grpnm"];
+                dataGridView1.Rows[i].Cells[3].Value = (int)reader["cdg_digit"];
+                dataGridView1.Rows[i].Cells[4].Value = (int)reader["cdg_length"];
+                dataGridView1.Rows[i].Cells[5].Value = (string)reader["cdg_use"];
                 // dataGridView1.Rows[i].Cells[5].Value = (string)reader["cdg_kind"];
                 i++;
 
@@ -68,6 +69,7 @@ namespace ciscode
             {
                 conn.Open();
                 // MessageBox.Show("데이터베이스에 연결하였습니다.", "Information");
+                init_btn();
 
             }
             else
@@ -77,18 +79,40 @@ namespace ciscode
 
         }
 
+        private void cfm_btn()
+        {
+            button1.Enabled = false;
+            button2.Enabled = true;
+            button3.Enabled = false;
+            button4.Enabled = true;
+            button5.Enabled = true;
+            button6.Enabled = true;
+        }
+        private void init_btn()
+        {
+            button1.Enabled = true;
+            button2.Enabled = true;
+            button3.Enabled = false;
+            button4.Enabled = true;
+            button5.Enabled = false;
+            button6.Enabled = false;
+        }
+
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
 
         }
         private void button2_Click(object sender, EventArgs e)
         {
+            cfm_btn();
 
             var rowIdx = dataGridView1.CurrentRow == null ? 0 : dataGridView1.CurrentRow.Index;
 
             if (dataGridView1.Rows.Count == 0)
             {
+                select_cgsw = true;
                 rowIdx = dataGridView1.Rows.Add();
+                select_cgsw = false;
             }
             else
             {
@@ -108,14 +132,16 @@ namespace ciscode
         }
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
-            if (dataGridView1.Rows.Count == 0) return;
-            //그리드뷰에 행이 없을때는 수행하지 않음
-            if (dataGridView1.SelectedRows.Count == 0) return;
-            //그리드뷰에 선택된 행이 없을때는 수행하지 않음
 
             Control ctl;
             Type type;
             PropertyInfo pi;
+
+            if (select_cgsw == true) return;
+            if (dataGridView1.Rows.Count == 0) return;
+            //그리드뷰에 행이 없을때는 수행하지 않음
+            if (dataGridView1.SelectedRows.Count == 0) return;
+            //그리드뷰에 선택된 행이 없을때는 수행하지 않음
 
             Select_sw = true;
 
@@ -125,11 +151,11 @@ namespace ciscode
                 {
                     if (!(dataGridView1.SelectedRows[0].Cells[col].Value?.ToString() == "A"))
                     {
-                        t_grpcd.Enabled = true;
+                        t_grpcd.Enabled = false;
                     }
                     else
                     {
-                        t_grpcd.Enabled = false;
+                        t_grpcd.Enabled = true;
                     }
                 }
 
@@ -176,9 +202,17 @@ namespace ciscode
                 "자료를 삭제하시겠습니까?", "삭제확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (result == DialogResult.No) return;
             //삭제하겠다고
+            if (reader != null) reader.Close();
             try
             {
                 //sql로 data 삭제는 여기서 지금은 생략
+                String sql3 = "delete from yyc_cdg where cdg_grpcd =  @cdg_grpcd";
+                cmd = new MySqlCommand();  //cmd sql위한 준비작업
+                cmd.Connection = conn;
+                cmd.CommandText = sql3;   //실행시킬 sql문장이 무엇인지 지정
+                                          // cmd.Prepare();
+                cmd.Parameters.AddWithValue("@cdg_grpcd", row.Cells["grpcd"].Value.ToString());
+                cmd.ExecuteNonQuery();
                 dataGridView1.Rows.RemoveAt(row.Index);
                 MessageBox.Show("자료가 정상적으로 삭제되었습니다");
             }
@@ -220,9 +254,10 @@ namespace ciscode
             int value;
             aa = pi.GetValue(ctl).ToString();
 
-            if (((string)row.Cells["status"].Value == null) || ((string)row.Cells["status"].Value.ToString() == ""))
+            if ((row.Cells["status"].Value == null) || (row.Cells["status"].Value.ToString() == ""))
             {
                 row.Cells["status"].Value = "U";
+                cfm_btn();
             }
 
             if ((aa == "") || (aa == null)) return;
@@ -319,6 +354,7 @@ namespace ciscode
                     }
                 }
 
+                if (reader != null) reader.Close();
                 //모든 입력작업이 될 준비단계
                 for (int j = 0; j < dataGridView1.RowCount; j++) //행
                 {
@@ -332,6 +368,20 @@ namespace ciscode
                             //insert sql 생성
                             //insert into kgy_cdg (cdg_grpcd, cdg_grpnm,cdg_digit,cdg_length,cdg_use)
                             // values('1', '1', 2, 0, 'Y')
+                            String insert_sql = "insert into yyc_cdg (cdg_grpcd, cdg_grpnm,cdg_digit,cdg_length,cdg_use) " +
+                                                "values(@val1, @val2, @val3, @val4, @val5)";
+                            cmd = new MySqlCommand();  //cmd sql위한 준비작업
+                            cmd.Connection = conn;
+                            cmd.CommandText = insert_sql;   //실행시킬 sql문장이 무엇인지 지정
+                                                            // cmd.Prepare();
+                            cmd.Parameters.AddWithValue("@val1", dataGridView1.Rows[i].Cells[1].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val2", dataGridView1.Rows[i].Cells[2].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val3", dataGridView1.Rows[i].Cells[3].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val4", dataGridView1.Rows[i].Cells[4].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val5", dataGridView1.Rows[i].Cells[5].Value.ToString());
+                            cmd.ExecuteNonQuery();
+
+                            dataGridView1.Rows[i].Cells[0].Value = "";
 
                         }
                         else
@@ -339,6 +389,25 @@ namespace ciscode
                             //update sql 생성
                             //uadate kgy_cdg set cdg_grpnm='2', cdg_digit=3, cdg_length=1,  cdg_use='Y'
                             //where cdg_grpcd = '1'
+                            String update_sql = "update yyc_cdg set " +
+                                                "cdg_grpcd=@val1 ," +
+                                                "cdg_grpnm=@val2 ," +
+                                                "cdg_digit=@val3 ," +
+                                                "cdg_length=@val4 ," +
+                                                "cdg_use=@val5 " +
+                                                "Where cdg_grpcd=@val1";
+                            cmd = new MySqlCommand();  //cmd sql위한 준비작업
+                            cmd.Connection = conn;
+                            cmd.CommandText = update_sql;   //실행시킬 sql문장이 무엇인지 지정
+                                                            // cmd.Prepare();
+                            cmd.Parameters.AddWithValue("@val1", dataGridView1.Rows[i].Cells[1].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val2", dataGridView1.Rows[i].Cells[2].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val3", dataGridView1.Rows[i].Cells[3].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val4", dataGridView1.Rows[i].Cells[4].Value.ToString());
+                            cmd.Parameters.AddWithValue("@val5", dataGridView1.Rows[i].Cells[5].Value.ToString());
+                            cmd.ExecuteNonQuery();
+
+                            dataGridView1.Rows[i].Cells[0].Value = "";
 
                         }
                     }
@@ -346,6 +415,11 @@ namespace ciscode
                 }
 
             }
+        }
+        private void button6_Click(object sender, EventArgs e)
+        {
+            init_btn();
+            this.button1_Click(null,null);
         }
 
         private void dataGridView1_CellContentClick_1(object sender, DataGridViewCellEventArgs e)
@@ -357,5 +431,6 @@ namespace ciscode
         {
 
         }
+
     }
 }

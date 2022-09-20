@@ -1,0 +1,407 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data.SqlClient; //mysql DB 연결시 필요
+using MySql.Data.MySqlClient; //mysql DB 연결시 필요
+using System.Reflection; //PropertyInfo 클래스 사용
+using System.Text.RegularExpressions;
+
+
+
+namespace lhrcode
+{
+    public partial class Form1 : Form
+    {
+        static String mysql_str = "server=127.0.0.1;port=3307;Database=lhr;Uid=root;Pwd=1234;Charset=utf8";
+        MySqlConnection conn = new MySqlConnection(mysql_str);
+        MySqlCommand cmd;  //sql문장을 실행시킬때
+        MySqlDataReader reader;   //sql문장을 실행시키고 결과받을때
+
+        private bool select_sw = false;
+        private bool select_ch = false;
+
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            if (conn.State == ConnectionState.Closed) // 데이터베이스 연결 안되어있으면 연결하기
+            {
+                conn.Open();
+            }
+            init_btn(); //버튼 초기화 함수호출
+        }
+
+        private void init_btn() //버튼 초기화 함수
+        {
+            btn_Selec.Enabled = true;
+            btn_Input.Enabled = true;
+            btn_Del.Enabled = true;
+            btn_Corret.Enabled = false;
+            btn_Confm.Enabled = false;
+            btnCanc.Enabled = false;
+        }
+
+        private void btn_Selec_Click(object sender, EventArgs e) //조회버튼 클릭시
+        {
+            //1. sql 문을 만든다(조회)
+            //2. 연결된 conn에 sql을 요청한다.
+            //3. 실행요청해서 나온 결과를 그리드에 출력한다.
+
+            dataGridView1.Rows.Clear();
+
+            String sql1 = "SELECT cdg_grpcd, cdg_grpnm, cdg_digit, cdg_length, cdg_use, cdg_kind FROM lhr_cdg";
+            if (reader != null) reader.Close();
+            cmd = new MySqlCommand();  //cmd sql위한 준비작업
+            cmd.Connection = conn;
+            cmd.CommandText = sql1;   //실행시킬 sql문장이 무엇인지 지정
+            reader = cmd.ExecuteReader();
+            int i = 0;
+            while (reader.Read() == true)
+            {
+                //read해서 data가 읽히면 계속 작업
+                dataGridView1.Rows.Add();
+                dataGridView1.Rows[i].Cells[1].Value = (String)reader["cdg_grpcd"];
+                dataGridView1.Rows[i].Cells[2].Value = (String)reader["cdg_grpnm"];
+                dataGridView1.Rows[i].Cells[3].Value = (int)reader["cdg_digit"];
+                dataGridView1.Rows[i].Cells[4].Value = (int)reader["cdg_length"];
+                dataGridView1.Rows[i].Cells[5].Value = (String)reader["cdg_use"];
+                i++;
+            }
+            if (i == 0)
+            {
+                MessageBox.Show("조회될 data가 없습니다.");
+            }
+
+            this.dataGridView1_SelectionChanged(null, null); // 조회시 그리드뷰 첫번째 행을 텍스트박스에 넣어줌.
+        }
+
+        private void cfm_btn()
+        {
+            btn_Selec.Enabled = false;
+            btn_Input.Enabled = true;
+            btn_Del.Enabled = true;
+            btn_Corret.Enabled = false;
+            btn_Confm.Enabled = true;
+            btnCanc.Enabled = true;
+        }
+        private void btn_Input_Click(object sender, EventArgs e)  //입력버튼 클릭시
+        {
+            cfm_btn();
+
+            var rowIdx = 0; // 행인덱스 번호 변수
+
+            if (dataGridView1.CurrentRow == null) // 현재 선택 행이 null이라면
+            {
+                rowIdx = 0; 
+            }
+            else { // 현재 선택된 행의 인덱스번호를 변수에 할당
+                rowIdx = dataGridView1.CurrentRow.Index; 
+            }
+
+            
+            if (dataGridView1.Rows.Count <= 0)  // 레코드가 하나도 없을때
+            {
+                select_ch = true; // dataGridView1_SelectionChanged() 이벤트를 호출해도 더 이상 진행이 안되게함.
+                rowIdx = dataGridView1.Rows.Add(); // 한줄추가  
+                select_ch = false;
+
+            }
+            else {  // 레코드가 있을때
+                rowIdx++; // 현재 행 인덱스번호에 1 증가
+                dataGridView1.Rows.Insert(rowIdx); // 현재 선택된 행 다음에 삽입
+            }
+            dataGridView1.Rows[rowIdx].Cells["status"].Value = "A"; // 입력할 행의 상태를 A로 정하기
+            dataGridView1.CurrentCell = dataGridView1.Rows[rowIdx].Cells[0]; // 현재선택셀을 지정
+            txt_Gcode.Focus(); // 입력 버튼 누르면 포커스를 텍스트박스에
+        }
+
+        private void txt_Gcode_TextChanged(object sender, EventArgs e) //텍스트박스가 체인지될 때, 여러 텍스트박스에서 사용
+        {
+            //텍스트값이 변경 될때 이벤트 발생
+            //그리드뷰에 선택된 행이 없으면 할일 없음
+
+            if (select_sw) return; //그리드에서 선택시는 무시하라. select_sw가 true일때는 무시
+
+            if (dataGridView1.SelectedRows.Count <= 0) // 선택된 행이 없으면
+            {
+                return;  // 리턴
+            }
+
+            Control ctl = sender as Control; // 받은 오브젝트를 컨트롤로 형변환해서 컨트롤 변수로 저장
+            DataGridViewRow row = dataGridView1.CurrentRow;
+
+            if (row == null) return; //읽어보고 행이 없으면 리턴
+
+            //이벤트가 일어난 컨트롤을 알수 있음
+
+            Type type = ctl.GetType(); //ctl컨트롤의 타입을 읽어서 타입 변수에 지정
+            PropertyInfo pi = null;
+            String aa;
+
+            pi = type.GetProperty("Text"); // 텍스트박스의 텍스트를 읽어옴.
+
+            if (pi == null)
+            {
+                return;
+            }
+
+            string col_name = ctl.Name.Substring(4); // 텍스트박스의 이름에서 5번째 글자부터 읽어서 저장
+
+            row.Cells[col_name].Value = pi.GetValue(ctl); // 그리드뷰의 현재행의 읽어온 셀에 텍스트박스 내용 넣기
+
+            int value; // 참조변수로 사용됨.
+            aa = pi.GetValue(ctl).ToString(); // 텍스트박스 값을 저장
+
+            if ((String)row.Cells["status"].Value == null || (String)row.Cells["status"].Value == "")
+            {
+                row.Cells["status"].Value = "U";
+                cfm_btn();// 버튼 컨트롤 함수 호출
+            }
+
+            if (aa == "" || aa == null) // 아무것도 없을때는 통과
+            {
+                return;
+            }
+
+            if (ctl.Name.ToString() == "txt_Codelen" || ctl.Name.ToString() == "txt_Codenmlen") 
+            {
+                // 단위코드길이와 단이코드명 길이 값이 숫자가 아니면 error
+
+                // aa를 숫자로 변환이 안되면 false 반환됨.
+                if (int.TryParse(aa, out value) == false) // out 변수명 => 참조변수
+                 {
+                        MessageBox.Show("Error");                        
+                        return;
+                 }                
+            }            
+
+            if (ctl.Name.ToString() == "txt_Useyn") // 사용여부가 Y/N이 아니면 에러
+            {   
+                if (!(aa == "Y" || aa == "N"))
+                {
+                    MessageBox.Show("Error");
+                    return;
+                }
+            }  
+        }
+        
+        private Control GetControlByName(Control control, String col_name) // 그리드뷰의 셀의 이름에 txt_붙여서 텍스트박스에 매칭함수
+        {
+            
+            String ctl_name = "txt_" + col_name;
+
+            Control[] ctl = control.Controls.Find(ctl_name, true);
+            return ctl.Length == 0 ? null : ctl[0]; // 못찾으면 
+        }
+
+        private void dataGridView1_SelectionChanged(object sender, EventArgs e) // 그리드뷰가 변경될때마다
+        {
+            if (select_ch == true) return;
+            
+            if (dataGridView1.Rows.Count == 0) return;
+            if (dataGridView1.SelectedRows.Count == 0) return;
+
+            Type type;
+            PropertyInfo pi;
+            Control ctl;
+
+            select_sw = true; // 그리드뷰가 선택될때마다 true, txt_Gcode_TextChanged() 이벤트를 진행하지 못하게 함.
+            for (int col = 0; col < dataGridView1.ColumnCount; col++)
+            {
+                if (dataGridView1.Columns[col].Name == "status")
+                {
+                    if ((dataGridView1.SelectedRows[0].Cells[col].Value)?.ToString() == "A") 
+                    {
+                        txt_Gcode.Enabled = true;
+                    }
+                    else 
+                    {
+                        txt_Gcode.Enabled = false;
+                    }
+                }
+                
+                ctl = GetControlByName(panel2, dataGridView1.Columns[col].Name);
+
+                if (ctl == null) continue;
+
+                type = ctl.GetType();
+                pi = null;
+                pi = type.GetProperty("Text");
+
+                if (pi != null)
+                {
+                    pi.SetValue(ctl, dataGridView1.SelectedRows[0].Cells[col].Value?.ToString()); 
+                    //?사용한 이유 : Value가 null이면 null반환, 아니면 스트링으로 반환하기
+                }
+            }
+            select_sw = false; //텍스트박스에 뿌려준 후 false
+        }
+
+        private void button1_Click(object sender, EventArgs e) //삭제버튼
+        {
+            
+
+            if (dataGridView1.SelectedRows.Count < 0)
+            {
+                MessageBox.Show("삭제할 자료를 먼저 선택하세요.");
+                return;
+            }
+
+            DataGridViewRow row = dataGridView1.CurrentRow; // 현재 선택된 행
+
+            if ((String)row.Cells["status"].Value == "A") //상태값이 A인 경우
+            {
+                dataGridView1.Rows.RemoveAt(dataGridView1.CurrentRow.Index); // 그리드에서 해당 행 인덱스를 제거
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(row.Cells["Gcode"].Value + 
+                " 자료를 삭제하시겠습니까?", "삭제확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result == DialogResult.No) return;
+
+            //삭제하겠다고 눌렀을때
+            try
+            {
+                //sql로 삭제
+                String del_sql = "delete from lhr_cdg where cdg_gcode =  @gcode";
+                cmd = new MySqlCommand();  //cmd sql위한 준비작업
+                cmd.Connection = conn;
+                cmd.CommandText = del_sql;   //실행시킬 sql문장이 무엇인지 지정
+                                          // cmd.Prepare();
+                cmd.Parameters.AddWithValue("@gcode", row.Cells["Gcode"].Value.ToString());
+                cmd.ExecuteNonQuery();
+
+                dataGridView1.Rows.RemoveAt(row.Index);
+                MessageBox.Show("자료가 정상적으로 삭제 되었습니다.");
+            }
+
+            catch(Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+                return;
+            }
+
+            finally 
+            { 
+            
+            }
+
+            if (dataGridView1.RowCount != 0) return;
+        }
+
+        private void btn_Corret_Click(object sender, EventArgs e) //수정버튼 사용안함
+        {
+            
+        }
+
+        private void txt_Gcode_Leave(object sender, EventArgs e) 
+        {
+            // 그룹코드 텍스트박스에서 빠져나왔을때 일어나는 이벤트
+            // 그리드뷰에 같은 코드가 있는지 체크
+
+            if (txt_Gcode.Text == "")
+            {
+                return;
+            }
+
+            if (dataGridView1.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("입력버튼을 먼저 선택하세요.");
+                txt_Gcode.Text = "";
+                txt_Gcode.Focus();
+                return;
+            }
+
+            int rowidx = dataGridView1.CurrentRow.Index; // 현재 선택된 행
+            
+            for (int i = 0; i < dataGridView1.Rows.Count; i++ )
+            {
+                if (i != rowidx) 
+                {
+                    if (dataGridView1.Rows[i].Cells["Gcode"].Value == null)
+                    {
+                        continue; // 현재행이 비어있으면 다시 for문으로 돌아감. i가 증가됨.
+                    }
+                    if (dataGridView1.Rows[i].Cells["Gcode"].Value.ToString() == txt_Gcode.Text)
+                    {
+                        txt_Gcode.Focus();
+                        MessageBox.Show(txt_Gcode.Text+ " 코드는 입력될 자료이거나 입력되어있는 자료입니다.");
+                        dataGridView1.Rows[rowidx].Cells["Gcode"].Value = "";
+                        txt_Gcode.Text = "";
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void btn_Confm_Click(object sender, EventArgs e) // 확인 버튼
+        {
+            // 그리드뷰를 다 읽어보고 U,A만 비어있는지 확인절차 필요
+
+            for (int i = 0; i < dataGridView1.RowCount; i++) // 행을 읽음
+            {
+                //MessageBox.Show(dataGridView1.Rows[i].Cells["status"].Value.ToString());
+                if ((dataGridView1.Rows[i].Cells[0].Value == null) ||
+                    (dataGridView1.Rows[i].Cells[0].Value.ToString() == "")
+                    )
+                {
+                    continue;
+                }
+
+                 for (int col = 1; col < dataGridView1.ColumnCount; col++) // 셀을 읽음
+                 {                    
+                      if ((dataGridView1.Rows[i].Cells[col].Value == null) ||
+                          (dataGridView1.Rows[i].Cells[col].Value.ToString() == ""))
+                      {
+                        MessageBox.Show(i+1 + "번째 자료를 모두 정확히 입력하세요.");
+                        dataGridView1.CurrentCell = dataGridView1.Rows[i].Cells[col];
+                        return;
+                       }                    
+                 }                 
+            }
+
+            // 모든 입력 작없이 될 준비 단계
+            for (int i = 0; i < dataGridView1.RowCount; i++) // 행을 읽음
+            {                
+                if (dataGridView1.Rows[i].Cells[0].Value == null)
+                {
+                    continue;
+                }
+
+                for (int col = 1; col < dataGridView1.ColumnCount; col++) // 셀을 읽음
+                {
+                    if (dataGridView1.Rows[i].Cells[col].Value.ToString() == "A") // insert sql
+                    {
+                        //INSERT INTO lhr_cdg(cdg_grpcd, cdg_grpnm, cdg_digit, cdg_length, cdg_use) VALUES('4', '1', 2, 0, 'Y');
+
+                        dataGridView1.Rows[i].Cells[0].Value = "";
+                    }
+                    else // update sql
+                    {
+                        //UPDATE lhr_cdg SET cdg_grpnm='2', cdg_digit=3, cdg_length=1, cdg_use='N' WHERE cdg_grpcd='4';
+
+                        dataGridView1.Rows[i].Cells[0].Value = "";
+                    }
+                }
+
+                //sql 실행
+                init_btn(); // 버튼 초기화
+            }
+        }
+
+        private void btnCanc_Click(object sender, EventArgs e) //취소버튼 클릭시
+        {
+            init_btn();
+            this.btn_Selec_Click(null, null); // 조회버튼을 클릭한 상태
+        }
+    }
+}
