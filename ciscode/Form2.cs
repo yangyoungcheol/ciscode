@@ -67,13 +67,13 @@ namespace ciscode
 
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void button1_Click_1(object sender, EventArgs e)
         {
 
             // sql문 작성
             // 연결된
             dataGridView1.Rows.Clear();
-            String sql = "select  unit_grpcd, unit_cd, unit_nm, unit_nm2, unit_seq, unit_use from yyc_cdg " +
+            String sql = "select  unit_grpcd, unit_cd, unit_nm, unit_nm2, unit_seq, unit_use from yyc_unit " +
                          " Where unit_grpcd=@unit_grpcd";
 
 
@@ -81,8 +81,8 @@ namespace ciscode
             cmd = new MySqlCommand();  //cmd sql위한 준비작업
             cmd.Connection = conn;
             cmd.CommandText = sql;   //실행시킬 sql문장이 무엇인지 지정
-            // cmd.Prepare();
             cmd.Parameters.AddWithValue("@unit_grpcd", comboBox2.Text);
+            // MessageBox.Show(comboBox2.Text);
             //cmd.Prepare();
             //cmd.Parameters.AddWithValue("@name1", textBox1.Text + "%");
             //@number가 어떤 textbox값인지 알려줌
@@ -94,7 +94,7 @@ namespace ciscode
                 dataGridView1.Rows.Add();
                 dataGridView1.Rows[i].Cells[1].Value = (string)reader["unit_cd"];
                 dataGridView1.Rows[i].Cells[2].Value = (string)reader["unit_nm"];
-                dataGridView1.Rows[i].Cells[3].Value = (int)reader["unit_nm2"];
+                dataGridView1.Rows[i].Cells[3].Value = (string)reader["unit_nm2"];
                 dataGridView1.Rows[i].Cells[4].Value = (int)reader["unit_seq"];
                 dataGridView1.Rows[i].Cells[5].Value = (string)reader["unit_use"];
                 dataGridView1.Rows[i].Cells[6].Value = comboBox2.Text;
